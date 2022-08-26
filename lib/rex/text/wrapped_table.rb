@@ -89,6 +89,7 @@ class WrappedTable
       self.colprops[idx]['WordWrap'] = true
       self.colprops[idx]['Stylers'] = []
       self.colprops[idx]['Formatters'] = []
+      self.colprops[idx]['ColumnStylers'] = []
     }
 
     # ensure all our internal state gets updated with the given rows by
@@ -355,8 +356,9 @@ protected
   # Converts the columns to a string.
   #
   def columns_to_s # :nodoc:
+    styled_columns = columns.each_with_index.map { | col, idx | style_table_column_headers(col, idx)}
     optimal_widths = calculate_optimal_widths
-    values_as_chunks = chunk_values(columns, optimal_widths)
+    values_as_chunks = chunk_values(styled_columns, optimal_widths)
     result = chunks_to_s(values_as_chunks, optimal_widths)
 
     barline = ""
@@ -642,6 +644,16 @@ protected
     str_cp = str.dup
 
     colprops[idx]['Stylers'].each do |s|
+      str_cp = s.style(str_cp)
+    end
+
+    str_cp
+  end
+
+  def style_table_column_headers(str, idx)
+    str_cp = str.dup
+
+    colprops[idx]['ColumnStylers'].each do |s|
       str_cp = s.style(str_cp)
     end
 

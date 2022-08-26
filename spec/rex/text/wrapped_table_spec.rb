@@ -221,6 +221,43 @@ describe Rex::Text::Table do
       TABLE
     end
 
+    it 'should handle scenarios were a blank string is passed as a column title to support stylers' do
+      col_1_field = "A" * 5
+      col_2_field = "B" * 50
+      col_3_field = "C" * 15
+
+      options = {
+        'Header' => 'Header',
+        'Columns' => [
+          '',
+          'Column 2',
+          'Column 3'
+        ],
+        'ColProps' => {
+          'Column 2' => {
+            'Formatters' => [formatter]
+          }
+        }
+      }
+
+      tbl = Rex::Text::Table.new(options)
+
+      tbl << [
+        col_1_field,
+        col_2_field,
+        col_3_field
+      ]
+
+      expect(tbl).to match_table <<~TABLE
+        Header
+        ======
+
+               Column 2                                                              Column 3
+               --------                                                              --------
+        AAAAA  IHAVEBEENFORMATTEDBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB  CCCCCCCCCCCCCCC
+      TABLE
+    end
+
     it 'should apply field formatters correctly and increase column length' do
       col_1_field = "A" * 5
       col_2_field = "B" * 50
