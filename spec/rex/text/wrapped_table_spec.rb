@@ -258,6 +258,83 @@ describe Rex::Text::Table do
       TABLE
     end
 
+    it 'should style column titles when a styler is added under a specific column name' do
+      col_1_field = "A" * 5
+      col_2_field = "B" * 50
+      col_3_field = "C" * 15
+
+      options = {
+        'Header' => 'Header',
+        'Columns' => [
+          '',
+          'Column 2',
+          'Column 3'
+        ],
+        'ColProps' => {
+          'Column 2' => {
+            'Formatters' => [formatter],
+            'ColumnStylers' => [styler]
+          }
+        }
+      }
+
+      tbl = Rex::Text::Table.new(options)
+
+      tbl << [
+        col_1_field,
+        col_2_field,
+        col_3_field
+      ]
+
+      expect(tbl).to match_table <<~TABLE
+        Header
+        ======
+
+               %bluColumn 2%clr                                                              Column 3
+               --------                                                              --------
+        AAAAA  IHAVEBEENFORMATTEDBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB  CCCCCCCCCCCCCCC
+      TABLE
+    end
+
+    it 'should handle scenarios were a styler and formatter are specified for a single column' do
+      col_1_field = "A" * 5
+      col_2_field = "B" * 50
+      col_3_field = "C" * 15
+
+      options = {
+        'Header' => 'Header',
+        'Columns' => [
+          '',
+          'Column 2',
+          'Column 3'
+        ],
+        'ColProps' => {
+          'Column 2' => {
+            'Formatters' => [formatter],
+            'Stylers' => [styler],
+            'ColumnStylers' => [styler]
+          }
+        }
+      }
+
+      tbl = Rex::Text::Table.new(options)
+
+      tbl << [
+        col_1_field,
+        col_2_field,
+        col_3_field
+      ]
+
+      expect(tbl).to match_table <<~TABLE
+        Header
+        ======
+
+               %bluColumn 2%clr                                                              Column 3
+               --------                                                              --------
+        AAAAA  %bluIHAVEBEENFORMATTEDBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB%clr  CCCCCCCCCCCCCCC
+      TABLE
+    end
+
     it 'should apply field formatters correctly and increase column length' do
       col_1_field = "A" * 5
       col_2_field = "B" * 50

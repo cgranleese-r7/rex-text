@@ -85,7 +85,9 @@ class WrappedTable
     # Default column properties
     self.columns.length.times { |idx|
       self.colprops[idx] = {}
-      self.colprops[idx]['MaxWidth'] = self.columns[idx].length
+      self.colprops[idx]['MaxWidth'] = ::IO.console&.winsize&.[](1)
+      self.colprops[idx]['MinWidth'] = 0
+      self.colprops[idx]['Width'] = 0
       self.colprops[idx]['WordWrap'] = true
       self.colprops[idx]['Stylers'] = []
       self.colprops[idx]['Formatters'] = []
@@ -113,17 +115,41 @@ class WrappedTable
   # Converts table contents to a string.
   #
   def to_s
+    optimal_widths = []
+
+    styled_columns = columns.map.with_index do |col, idx|
+      col = style_table_column_headers(col, idx)
+      if (colprops[idx]['Width'] < display_width(col))
+        colprops[idx]['Width'] = display_width(col)
+        optimal_widths[idx] = colprops[idx]['Width']
+      end
+      col
+    end
+
+    styled_rows = rows.map do |row|
+      row.map.with_index do |cell, index|
+        row = style_table_field(cell, index)
+        if (colprops[index]['Width'] < display_width(row))
+          colprops[index]['Width'] = display_width(row)
+          optimal_widths[index] = colprops[index]['Width']
+        end
+        row
+      end
+    end
+
+    optimal_widths = calculate_optimal_widths(optimal_widths)
+
     str  = prefix.dup
     str << header_to_s || ''
-    str << columns_to_s || ''
+    str << columns_to_s(styled_columns, optimal_widths) || ''
     str << hr_to_s || ''
 
     sort_rows
-    rows.each { |row|
+    styled_rows.each { |row|
       if (is_hr(row))
         str << hr_to_s
       else
-        str << row_to_s(row) if row_visible(row)
+        str << row_to_s(row, optimal_widths) if row_visible(row)
       end
     }
 
@@ -185,12 +211,6 @@ class WrappedTable
     end
     formatted_fields = fields.map.with_index { |field, idx|
       field = format_table_field(field, idx)
-
-      if (colprops[idx]['MaxWidth'] < display_width(field))
-        old = colprops[idx]['MaxWidth']
-        colprops[idx]['MaxWidth'] = display_width(field)
-      end
-
       field
     }
 
@@ -355,9 +375,7 @@ protected
   #
   # Converts the columns to a string.
   #
-  def columns_to_s # :nodoc:
-    styled_columns = columns.each_with_index.map { | col, idx | style_table_column_headers(col, idx)}
-    optimal_widths = calculate_optimal_widths
+  def columns_to_s(styled_columns, optimal_widths) # :nodoc:
     values_as_chunks = chunk_values(styled_columns, optimal_widths)
     result = chunks_to_s(values_as_chunks, optimal_widths)
 
@@ -391,9 +409,7 @@ protected
   #
   # Converts a row to a string.
   #
-  def row_to_s(row) # :nodoc:
-    row = row.each_with_index.map { |cell, index| style_table_field(cell, index) }
-    optimal_widths = calculate_optimal_widths
+  def row_to_s(row, optimal_widths = nil) # :nodoc:
     values_as_chunks = chunk_values(row, optimal_widths)
     chunks_to_s(values_as_chunks, optimal_widths)
   end
@@ -569,14 +585,13 @@ protected
     without_extra_column
   end
 
-  def calculate_optimal_widths
+  def calculate_optimal_widths(optimal_widths_arr)
     # Calculate the minimum width each column can be. This is dictated by the user.
-    user_influenced_column_widths = colprops.map do |colprop|
-      if colprop['WordWrap'] == false
-        colprop['MaxWidth']
-        raise 'Not implemented'
-      else
+    user_influenced_column_widths = optimal_widths_arr.map.with_index do |width|
+      if self.width < width
         nil
+      else
+        width
       end
     end
 
@@ -585,17 +600,15 @@ protected
     remaining_column_calculations = user_influenced_column_widths.select(&:nil?).count
 
     # Calculate the initial widths, which will need an additional refinement to reallocate surplus space
-    naive_optimal_width_calculations = colprops.map.with_index do |colprop, index|
+    naive_optimal_width_calculations = user_influenced_column_widths.map.with_index do |width, index|
       shared_column_width = available_space / [remaining_column_calculations, 1].max
       remaining_column_calculations -= 1
 
-      if user_influenced_column_widths[index]
-        { width: user_influenced_column_widths[index], wrapped: false }
-      elsif colprop['MaxWidth'] < shared_column_width
-        available_space -= colprop['MaxWidth']
-        { width: colprop['MaxWidth'], wrapped: false }
-      else
+      if user_influenced_column_widths[index].nil?
         available_space -= shared_column_width
+        { width: shared_column_width, wrapped: true }
+      else
+        available_space -= width
         { width: shared_column_width, wrapped: true }
       end
     end
@@ -610,7 +623,7 @@ protected
       revisiting_column_counts -= 1
 
       if naive_width[:wrapped]
-        max_width = colprops[index]['MaxWidth']
+        max_width = optimal_widths_arr[index]
         if max_width < (naive_width[:width] + additional_column_width)
           surplus_width -= max_width - naive_width[:width]
           max_width
@@ -628,6 +641,7 @@ protected
     # columns that can fit. For now, we just ensure every width is at least 1 or more character wide, and in the future
     # it may have to truncate columns entirely.
     optimal_widths.map { |width| [1, width].max }
+    require 'pry'; binding.pry
   end
 
   def format_table_field(str, idx)
