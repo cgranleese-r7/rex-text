@@ -592,7 +592,7 @@ protected
     # Calculate the minimum width each column can be. This is dictated by the user.
     # user_influenced_column_widths = optimal_widths_arr.map.with_index do |width|
     #   if self.width < width
-    #     nil
+    #     self.width
     #   else
     #     width
     #   end
@@ -604,17 +604,19 @@ protected
 
 
     required_padding = indent + (colprops.length) * cellpad
-    available_space = self.width - user_influenced_column_widths.sum(&:to_i) - required_padding
+    available_space = self.width - required_padding
     remaining_column_calculations = user_influenced_column_widths.count
-
-    test = (self.width - required_padding)
-    test / remaining_column_calculations unless remaining_column_calculations == 0
 
     # Calculate the initial widths, which will need an additional refinement to reallocate surplus space
     naive_optimal_width_calculations = user_influenced_column_widths.map.with_index do |width, index|
       shared_column_width = available_space / remaining_column_calculations
 
-      { width: test, wrapped: true }
+      if self.rows.flatten.include?("")
+        available_space -= width
+        { width: width, wrapped: false }
+      else
+        { width: available_space, wrapped: true }
+      end
 
 
       # if user_influenced_column_widths[index].nil?
@@ -657,6 +659,8 @@ protected
     # columns that can fit. For now, we just ensure every width is at least 1 or more character wide, and in the future
     # it may have to truncate columns entirely.
     optimal_widths.map { |width| [1, width].max }
+    require 'pry'; binding.pry
+
   end
 
   def format_table_field(str, idx)
