@@ -115,13 +115,13 @@ class WrappedTable
   # Converts table contents to a string.
   #
   def to_s
-    optimal_widths = []
+    @optimal_widths ||= []
 
     styled_columns = columns.map.with_index do |col, idx|
       col = style_table_column_headers(col, idx)
       if (colprops[idx]['Width'] < display_width(col))
         colprops[idx]['Width'] = display_width(col)
-        optimal_widths[idx] = colprops[idx]['Width']
+        @optimal_widths[idx] = colprops[idx]['Width']
       end
       col
     end
@@ -131,17 +131,17 @@ class WrappedTable
         row = style_table_field(cell, index)
         if (colprops[index]['Width'] < display_width(row))
           colprops[index]['Width'] = display_width(row)
-          optimal_widths[index] = colprops[index]['Width']
+          @optimal_widths[index] = colprops[index]['Width']
         end
         row
       end
     end
 
-    optimal_widths = calculate_optimal_widths(optimal_widths)
+    @optimal_widths = calculate_optimal_widths(@optimal_widths)
 
     str  = prefix.dup
     str << header_to_s || ''
-    str << columns_to_s(styled_columns, optimal_widths) || ''
+    str << columns_to_s(styled_columns, @optimal_widths) || ''
     str << hr_to_s || ''
 
     sort_rows
@@ -149,7 +149,7 @@ class WrappedTable
       if (is_hr(row))
         str << hr_to_s
       else
-        str << row_to_s(row, optimal_widths) if row_visible(row)
+        str << row_to_s(row, @optimal_widths) if row_visible(row)
       end
     }
 
@@ -496,7 +496,7 @@ protected
     # First split long strings into an array of chunks, where each chunk size is the calculated column width
     values_as_chunks = values.each_with_index.map do |value, idx|
       color_state = {}
-      column_width = optimal_widths[idx]
+      column_width = @optimal_widths[idx]
       chunks = []
       current_chunk = nil
       chars = value.chars
@@ -559,7 +559,7 @@ protected
     interleave(values_as_chunks).each do |row_chunks|
       line = ""
       row_chunks.each_with_index do |chunk, idx|
-        column_width = optimal_widths[idx]
+        column_width = @optimal_widths[idx]
         chunk_length_with_padding = column_width + (chunk.to_s.length - display_width(chunk.to_s))
 
         if idx == 0
@@ -586,31 +586,47 @@ protected
   end
 
   def calculate_optimal_widths(optimal_widths_arr)
+
+    user_influenced_column_widths = optimal_widths_arr
+
     # Calculate the minimum width each column can be. This is dictated by the user.
-    user_influenced_column_widths = optimal_widths_arr.map.with_index do |width|
-      if self.width < width
-        nil
-      else
-        width
-      end
-    end
+    # user_influenced_column_widths = optimal_widths_arr.map.with_index do |width|
+    #   if self.width < width
+    #     nil
+    #   else
+    #     width
+    #   end
+    # end
+
+    # if user_influenced_column_widths.any?{ |e| e.nil? } || user_influenced_column_widths.sum(&:to_i)  > self.width
+    #   user_influenced_column_widths = user_influenced_column_widths.map { |e| nil}
+    # end
+
 
     required_padding = indent + (colprops.length) * cellpad
     available_space = self.width - user_influenced_column_widths.sum(&:to_i) - required_padding
-    remaining_column_calculations = user_influenced_column_widths.select(&:nil?).count
+    remaining_column_calculations = user_influenced_column_widths.count
+
+    test = (self.width - required_padding)
+    test / remaining_column_calculations unless remaining_column_calculations == 0
 
     # Calculate the initial widths, which will need an additional refinement to reallocate surplus space
     naive_optimal_width_calculations = user_influenced_column_widths.map.with_index do |width, index|
-      shared_column_width = available_space / [remaining_column_calculations, 1].max
-      remaining_column_calculations -= 1
+      shared_column_width = available_space / remaining_column_calculations
 
-      if user_influenced_column_widths[index].nil?
-        available_space -= shared_column_width
-        { width: shared_column_width, wrapped: true }
-      else
-        available_space -= width
-        { width: shared_column_width, wrapped: true }
-      end
+      { width: test, wrapped: true }
+
+
+      # if user_influenced_column_widths[index].nil?
+      #   available_space -= shared_column_width
+      #   { width: shared_column_width, wrapped: true }
+      # elsif shared_column_width.negative?
+      #   width += shared_column_width
+      #   { width: width, wrapped: true }
+      # elsif shared_column_width.positive?
+      #   width -= shared_column_width
+      #   { width: width, wrapped: true }
+      # end
     end
 
     # Naively redistribute any surplus space to columns that were wrapped, and try to fit the cell on one line still
@@ -641,7 +657,6 @@ protected
     # columns that can fit. For now, we just ensure every width is at least 1 or more character wide, and in the future
     # it may have to truncate columns entirely.
     optimal_widths.map { |width| [1, width].max }
-    require 'pry'; binding.pry
   end
 
   def format_table_field(str, idx)
