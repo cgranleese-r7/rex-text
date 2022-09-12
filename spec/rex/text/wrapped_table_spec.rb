@@ -151,8 +151,8 @@ describe Rex::Text::Table do
       Header
       ======
 
-      Column 1  Column 2                                            Column 3
-      --------  --------                                            --------
+      Column 1  Column 2  Column 3
+      --------  --------  --------
       TABLE
     end
 
@@ -332,6 +332,156 @@ describe Rex::Text::Table do
                %bluColumn 2%clr                                                              Column 3
                --------                                                              --------
         AAAAA  %bluIHAVEBEENFORMATTEDBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB%clr  CCCCCCCCCCCCCCC
+      TABLE
+    end
+
+    it "should be lower than the specific columns 'MinWidth'" do
+      col_1_field = '=>'
+      col_2_field = 'B' * 12
+      col_3_field = 'C' * 5
+
+      options = {
+        'Header' => 'Header',
+        'Width' => 1,
+        'Columns' => [
+          '',
+          'Column 2',
+          'Column 3'
+        ],
+        'ColProps' => {
+          '' => {
+            'MinWidth' => 2
+          }
+        }
+      }
+
+      tbl = Rex::Text::Table.new(options)
+
+      tbl << [
+        col_1_field,
+        col_2_field,
+        col_3_field
+      ]
+
+      expect(tbl).to match_table <<~TABLE
+        Header
+        ======
+
+            C  C
+            o  o
+            l  l
+            u  u
+            m  m
+            n  n
+ 
+            2  3
+            -  -
+        =>  B  C
+            B  C
+            B  C
+            B  C
+            B  C
+            B
+            B
+            B
+            B
+            B
+            B
+            B
+      TABLE
+    end
+
+    it "should return a column equal to the columns specific 'Width'" do
+      col_1_field = '=>'
+      col_2_field = 'B' * 12
+      col_3_field = 'C' * 5
+
+      options = {
+        'Header' => 'Header',
+        'Width' => 1,
+        'Columns' => [
+          '',
+          'Column 2',
+          'Column 3'
+        ],
+        'ColProps' => {
+          '' => {
+            'Width' => 2
+          }
+        }
+      }
+
+      tbl = Rex::Text::Table.new(options)
+
+      tbl << [
+        col_1_field,
+        col_2_field,
+        col_3_field
+      ]
+
+      expect(tbl).to match_table <<~TABLE
+        Header
+        ======
+
+            C  C
+            o  o
+            l  l
+            u  u
+            m  m
+            n  n
+ 
+            2  3
+            -  -
+        =>  B  C
+            B  C
+            B  C
+            B  C
+            B  C
+            B
+            B
+            B
+            B
+            B
+            B
+            B
+      TABLE
+    end
+
+    it "should not exceed specific columns 'MaxWidth'" do
+      col_1_field = "A" * 5
+      col_2_field = "B" * 50
+      col_3_field = "C" * 15
+
+      options = {
+        'Header' => 'Header',
+        'Columns' => [
+          '',
+          'Column 2',
+          'Column 3'
+        ],
+        'ColProps' => {
+          'Column 2' => {
+            'MaxWidth' => 30
+          }
+        }
+      }
+
+      tbl = Rex::Text::Table.new(options)
+
+      tbl << [
+        col_1_field,
+        col_2_field,
+        col_3_field
+      ]
+
+      expect(tbl).to match_table <<~TABLE
+        Header
+        ======
+
+               Column 2                        Column 3
+               --------                        --------
+        AAAAA  BBBBBBBBBBBBBBBBBBBBBBBBBBBBBB  CCCCCCCCCCCCCCC
+               BBBBBBBBBBBBBBBBBBBB
       TABLE
     end
 
@@ -1064,10 +1214,6 @@ describe Rex::Text::Table do
       end
 
       it "ensures specific columns can disable wordwrapping" do
-        skip(
-          "Functionality not implemented. Allowing certain columns to disable wordwrapping would allow the values to be " \
-          "copy/pasted easily, i.e. password fields."
-        )
 
         options = {
           'Header' => 'Header',
@@ -1094,7 +1240,91 @@ describe Rex::Text::Table do
         tbl << ['2', 'auxiliary/admin/appletv/appletv_display_image', '', 'normal', 'No', 'Apple TV Image Remote Control']
 
         expect(tbl).to match_table <<~TABLE
-          ...
+          Header
+          ======
+       
+            #  Name                                                       Di  Ra  Ch  De
+                                                                          sc  nk  ec  sc
+                                                                          lo      k   ri
+                                                                          su          pt
+                                                                          re          io
+                                                                           D          n
+                                                                          at
+                                                                          e
+            -  ----                                                       --  --  --  --
+            0  auxiliary/admin/2wire/xslt_password_reset                  20  no  No  2W
+                                                                          07  rm      ir
+                                                                          -0  al      e
+                                                                          8-          Cr
+                                                                          15          os
+                                                                                      s-
+                                                                                      Si
+                                                                                      te
+                                                                                       R
+                                                                                      eq
+                                                                                      ue
+                                                                                      st
+                                                                                       F
+                                                                                      or
+                                                                                      ge
+                                                                                      ry
+                                                                                       P
+                                                                                      as
+                                                                                      sw
+                                                                                      or
+                                                                                      d
+                                                                                      Re
+                                                                                      se
+                                                                                      t
+                                                                                      Vu
+                                                                                      ln
+                                                                                      er
+                                                                                      ab
+                                                                                      il
+                                                                                      it
+                                                                                      y
+            1  auxiliary/admin/android/google_play_store_uxss_xframe_rce      no  No  An
+                                                                              rm      dr
+                                                                              al      oi
+                                                                                      d
+                                                                                      Br
+                                                                                      ow
+                                                                                      se
+                                                                                      r
+                                                                                      RC
+                                                                                      E
+                                                                                      Th
+                                                                                      ro
+                                                                                      ug
+                                                                                      h
+                                                                                      Go
+                                                                                      og
+                                                                                      le
+                                                                                       P
+                                                                                      la
+                                                                                      y
+                                                                                      St
+                                                                                      or
+                                                                                      e
+                                                                                      XF
+                                                                                      O
+            2  auxiliary/admin/appletv/appletv_display_image                  no  No  Ap
+                                                                              rm      pl
+                                                                              al      e
+                                                                                      TV
+                                                                                       I
+                                                                                      ma
+                                                                                      ge
+                                                                                       R
+                                                                                      em
+                                                                                      ot
+                                                                                      e
+                                                                                      Co
+                                                                                      nt
+                                                                                      ro
+                                                                                      l
+             
+
         TABLE
         expect(tbl.to_s.lines).to all(have_maximum_display_width(80))
       end

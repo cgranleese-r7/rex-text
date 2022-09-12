@@ -85,9 +85,9 @@ class WrappedTable
     # Default column properties
     self.columns.length.times { |idx|
       self.colprops[idx] = {}
-      self.colprops[idx]['MaxWidth'] = ::IO.console&.winsize&.[](1)
+      self.colprops[idx]['MaxWidth'] = ::BigDecimal::INFINITY
+      self.colprops[idx]['Width'] = nil
       self.colprops[idx]['MinWidth'] = 0
-      self.colprops[idx]['Width'] = 0
       self.colprops[idx]['WordWrap'] = true
       self.colprops[idx]['Stylers'] = []
       self.colprops[idx]['Formatters'] = []
@@ -115,41 +115,25 @@ class WrappedTable
   # Converts table contents to a string.
   #
   def to_s
-    @optimal_widths ||= []
-
-    styled_columns = columns.map.with_index do |col, idx|
-      col = style_table_column_headers(col, idx)
-      if (colprops[idx]['Width'] < display_width(col))
-        colprops[idx]['Width'] = display_width(col)
-        @optimal_widths[idx] = colprops[idx]['Width']
-      end
-      col
-    end
-
-    styled_rows = rows.map do |row|
-      row.map.with_index do |cell, index|
-        row = style_table_field(cell, index)
-        if (colprops[index]['Width'] < display_width(row))
-          colprops[index]['Width'] = display_width(row)
-          @optimal_widths[index] = colprops[index]['Width']
-        end
-        row
-      end
-    end
-
-    @optimal_widths = calculate_optimal_widths(@optimal_widths)
+    # Sort rows before they are styled
+    sort_rows
+    # Loop over and style columns
+    styled_columns = columns.map.with_index { |col, idx| style_table_column_headers(col, idx)}
+    # Loop over and style rows that are visible to the user
+    styled_rows = rows.select{ |row| row_visible(row) }
+                      .map { |row| row.map.with_index { |cell, index| style_table_field(cell, index)}}
+    optimal_widths = calculate_optimal_widths(styled_columns, styled_rows)
 
     str  = prefix.dup
     str << header_to_s || ''
-    str << columns_to_s(styled_columns, @optimal_widths) || ''
+    str << columns_to_s(styled_columns, optimal_widths) || ''
     str << hr_to_s || ''
 
-    sort_rows
     styled_rows.each { |row|
       if (is_hr(row))
         str << hr_to_s
       else
-        str << row_to_s(row, @optimal_widths) if row_visible(row)
+        str << row_to_s(row, optimal_widths)
       end
     }
 
@@ -354,7 +338,7 @@ protected
   #
   def row_visible(row)
     return true if self.scterm.nil?
-    row_to_s(row).match(self.scterm)
+    row.join(' ').match(self.scterm)
   end
 
   #
@@ -375,8 +359,8 @@ protected
   #
   # Converts the columns to a string.
   #
-  def columns_to_s(styled_columns, optimal_widths) # :nodoc:
-    values_as_chunks = chunk_values(styled_columns, optimal_widths)
+  def columns_to_s(columns, optimal_widths) # :nodoc:
+    values_as_chunks = chunk_values(columns, optimal_widths)
     result = chunks_to_s(values_as_chunks, optimal_widths)
 
     barline = ""
@@ -409,7 +393,7 @@ protected
   #
   # Converts a row to a string.
   #
-  def row_to_s(row, optimal_widths = nil) # :nodoc:
+  def row_to_s(row, optimal_widths) # :nodoc:
     values_as_chunks = chunk_values(row, optimal_widths)
     chunks_to_s(values_as_chunks, optimal_widths)
   end
@@ -496,7 +480,7 @@ protected
     # First split long strings into an array of chunks, where each chunk size is the calculated column width
     values_as_chunks = values.each_with_index.map do |value, idx|
       color_state = {}
-      column_width = @optimal_widths[idx]
+      column_width = optimal_widths[idx]
       chunks = []
       current_chunk = nil
       chars = value.chars
@@ -559,7 +543,7 @@ protected
     interleave(values_as_chunks).each do |row_chunks|
       line = ""
       row_chunks.each_with_index do |chunk, idx|
-        column_width = @optimal_widths[idx]
+        column_width = optimal_widths[idx]
         chunk_length_with_padding = column_width + (chunk.to_s.length - display_width(chunk.to_s))
 
         if idx == 0
@@ -585,19 +569,53 @@ protected
     without_extra_column
   end
 
-  def calculate_optimal_widths(optimal_widths_arr)
-    user_influenced_column_widths = optimal_widths_arr
+  def calculate_optimal_widths(styled_columns, styled_rows)
+    optimal_widths = []
+    display_widths = []
+
+    columns.count.times do
+      display_widths << 0
+    end
+
+    # Loop over styled columns and calculate display widths
+    styled_columns.each_with_index do |col, idx|
+      if (display_widths[idx] < display_width(col))
+        display_widths[idx] = display_width(col)
+        optimal_widths[idx] = display_widths[idx]
+      end
+      col
+    end
+
+    # Loop over styled rows and calculate display widths
+    styled_rows.each do |row|
+      row.each_with_index do |cell, index|
+        if (display_widths[index] < display_width(cell))
+          display_widths[index] = display_width(cell)
+          optimal_widths[index] = display_widths[index]
+        end
+        cell
+      end
+    end
 
     required_padding = indent + (colprops.length) * cellpad
     available_space = self.width - required_padding
-    remaining_column_calculations = user_influenced_column_widths.count
+    remaining_column_calculations = optimal_widths.count
 
     # Calculate the initial widths, which will need an additional refinement to reallocate surplus space
-    naive_optimal_width_calculations = user_influenced_column_widths.map.with_index do |width, index|
+    naive_optimal_width_calculations = optimal_widths.map.with_index do |width, index|
       shared_column_width = available_space / [remaining_column_calculations, 1].max
       remaining_column_calculations -= 1
 
-      if width < shared_column_width
+      if !colprops[index]['Width'].nil?
+        available_space -= width
+        { width: colprops[index]['Width'], wrapped: false }
+      elsif colprops[index]['MaxWidth'] != ::BigDecimal::INFINITY
+        available_space -= width
+        { width: colprops[index]['MaxWidth'], wrapped: false }
+      elsif colprops[index]['MinWidth'] != 0
+        available_space -= width
+        { width: colprops[index]['MinWidth'], wrapped: false }
+      elsif colprops[index]['WordWrap'] == false || width < shared_column_width
         available_space -= width
         { width: width, wrapped: false }
       else
@@ -616,7 +634,7 @@ protected
       revisiting_column_counts -= 1
 
       if naive_width[:wrapped]
-        max_width = optimal_widths_arr[index]
+        max_width = optimal_widths[index]
         if max_width < (naive_width[:width] + additional_column_width)
           surplus_width -= max_width - naive_width[:width]
           max_width
