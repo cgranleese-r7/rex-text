@@ -654,6 +654,101 @@ describe Rex::Text::Table do
       expect(tbl.to_s.lines).to all(have_maximum_display_width(120))
     end
 
+    it "handles scenarios were a column has a 'MinWidth' set as well as 'WordWrap' set as false" do
+      options = {
+        'Header'  => "IPv6 Active Routing Table",
+        'Prefix'  => "\n",
+        'Postfix' => "\n",
+        'Width' => 40,
+        'Columns' =>
+          [
+            'Subnet',
+            'Netmask',
+            'Gateway',
+          ],
+        'ColProps' =>
+          {
+            'Subnet'  => {
+              'WordWrap' => false,
+              'MinWidth' => 17
+            },
+            'Netmask' => {
+              'WordWrap' => false,
+              'MinWidth' => 17
+            },
+          }
+      }
+
+      tbl = Rex::Text::Table.new(options)
+
+      tbl << [
+        'fd15:4ba5:5a2b:1008::',
+        'ffff:ff00::',
+        'Session 1'
+      ]
+
+      expect(tbl).to match_table <<~TABLE
+        IPv6 Active Routing Table
+        =========================
+
+        Subnet                 Netmask      Ga
+                                            te
+                                            wa
+                                            y
+        ------                 -------      --
+        fd15:4ba5:5a2b:1008::  ffff:ff00::  Se
+                                            ss
+                                            io
+                                            n
+                                            1
+      TABLE
+      expect(tbl.to_s.lines).to all(have_maximum_display_width(120))
+    end
+
+    it "handles scenarios were a column has a 'MinWidth' set as well as 'MaxWidth' set" do
+      options = {
+        'Header'  => "IPv6 Active Routing Table",
+        'Prefix'  => "\n",
+        'Postfix' => "\n",
+        'Columns' =>
+          [
+            '12345',
+            '1234',
+            '1234567890abcdefgh',
+          ],
+        'ColProps' =>
+          {
+            '12345'  => {
+              'MaxWidth' => 17,
+              'MinWidth' => 5
+            },
+            '1234567890abcdefgh' => {
+              'MaxWidth' => 17,
+              'MinWidth' => 5
+            },
+          }
+      }
+
+      tbl = Rex::Text::Table.new(options)
+
+      tbl << [
+        'AAAAA',
+        'BBBB',
+        'CCCCCCCCCCCCCCCCC'
+      ]
+
+      expect(tbl).to match_table <<~TABLE
+        IPv6 Active Routing Table
+        =========================
+
+        12345  1234  1234567890abcdefg
+                     h
+        -----  ----  -----------------
+        AAAAA  BBBB  CCCCCCCCCCCCCCCCC
+      TABLE
+      expect(tbl.to_s.lines).to all(have_maximum_display_width(120))
+    end
+
     it 'makes use of all available space' do
       options = {
         'Header' => 'Hosts',

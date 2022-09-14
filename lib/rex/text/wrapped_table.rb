@@ -569,33 +569,21 @@ protected
     without_extra_column
   end
 
+  def foobar(display_width, allocated_width)
+
+
+  end
+
   def calculate_optimal_widths(styled_columns, styled_rows)
-    optimal_widths = []
-    display_widths = []
+    display_widths = [0] * columns.count
 
-    columns.count.times do
-      display_widths << 0
-    end
-
-    # Loop over styled columns and calculate display widths
-    styled_columns.each_with_index do |col, idx|
-      if (display_widths[idx] < display_width(col))
-        display_widths[idx] = display_width(col)
-        optimal_widths[idx] = display_widths[idx]
-      end
-      col
-    end
-
-    # Loop over styled rows and calculate display widths
-    styled_rows.each do |row|
+    # Loop over styled rows and columns and calculate display widths
+    (styled_rows + [styled_columns]).each do |row|
       row.each_with_index do |cell, index|
-        if (display_widths[index] < display_width(cell))
-          display_widths[index] = display_width(cell)
-          optimal_widths[index] = display_widths[index]
-        end
-        cell
+        display_widths[index] = [display_widths[index], display_width(cell)].max
       end
     end
+    optimal_widths = display_widths.dup
 
     required_padding = indent + (colprops.length) * cellpad
     available_space = self.width - required_padding
@@ -606,21 +594,26 @@ protected
       shared_column_width = available_space / [remaining_column_calculations, 1].max
       remaining_column_calculations -= 1
 
+      
+
       if !colprops[index]['Width'].nil?
         available_space -= width
-        { width: colprops[index]['Width'], wrapped: false }
+        { width: colprops[index]['Width'], requires_additional_space: false }
+      elsif (colprops[index]['MaxWidth'] != ::BigDecimal::INFINITY && width <= colprops[index]['MaxWidth']) && (colprops[index]['MinWidth'] != 0 && width >= colprops[index]['MinWidth'])
+        available_space -= width
+        { width: width, requires_additional_space: false }
       elsif colprops[index]['MaxWidth'] != ::BigDecimal::INFINITY
         available_space -= width
-        { width: colprops[index]['MaxWidth'], wrapped: false }
+        { width: colprops[index]['MaxWidth'], requires_additional_space: false }
+      elsif (colprops[index]['WordWrap'] == false || width < shared_column_width) || (colprops[index]['WordWrap'] == false && colprops[index]['MinWidth'] != 0)
+        available_space -= width
+        { width: width, requires_additional_space: false }
       elsif colprops[index]['MinWidth'] != 0
         available_space -= width
-        { width: colprops[index]['MinWidth'], wrapped: false }
-      elsif colprops[index]['WordWrap'] == false || width < shared_column_width
-        available_space -= width
-        { width: width, wrapped: false }
+        { width: colprops[index]['MinWidth'], requires_additional_space: false }
       else
         available_space -= shared_column_width
-        { width: shared_column_width, wrapped: true }
+        { width: shared_column_width, requires_additional_space: true }
       end
     end
 
@@ -628,12 +621,12 @@ protected
     current_width = naive_optimal_width_calculations.sum { |width| width[:width] }
     surplus_width = self.width - current_width - required_padding
     # revisit all columns that were wrapped and add add additional characters
-    revisiting_column_counts = naive_optimal_width_calculations.count { |width| width[:wrapped] }
+    revisiting_column_counts = naive_optimal_width_calculations.count { |width| width[:requires_additional_space] }
     optimal_widths = naive_optimal_width_calculations.map.with_index do |naive_width, index|
       additional_column_width = surplus_width / [revisiting_column_counts, 1].max
       revisiting_column_counts -= 1
 
-      if naive_width[:wrapped]
+      if naive_width[:requires_additional_space]
         max_width = optimal_widths[index]
         if max_width < (naive_width[:width] + additional_column_width)
           surplus_width -= max_width - naive_width[:width]
